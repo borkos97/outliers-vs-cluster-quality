@@ -1,5 +1,5 @@
 from mat2csv import mat2csv
-
+import json
 import pandas as pd
 import numpy as np
 
@@ -43,55 +43,39 @@ def prepare_data(filename):
     return data
 
 
-def silhouette(dataset, labels, dictionary):
-    value = silhouette_score(dataset, labels)
-    dictionary['silhouette'].append(value)
-    print(f'silhouette value = {value}')
+def clustering_quality(method, name, dictionary):
+    value = method
+    dictionary[name].append(value)
+    print(f'{name} value = {value}')
     return value
 
 
-def davies_bouldin(dataset, labels, dictionary):
-    value = davies_bouldin_score(dataset, labels)
-    print(f'davies_bouldin value = {value}')
-    dictionary['davies_bouldin'].append(value)
-    return value
+def methods(dataset, clustering, params, dictionary):
+    cluster_plot(dataset, clustering, params)
+    print(colored(f"Clustering quality for {params['name']}", 'red'))
+    clustering_quality(silhouette_score(dataset, clustering.labels_), 'silhouette', dictionary)
+    clustering_quality(davies_bouldin_score(dataset, clustering.labels_), 'davies_bouldin', dictionary)
+    clustering_quality(calinski_harabasz_score(dataset, clustering.labels_), 'calinski_harabasz', dictionary)
 
 
-def calinski_harabasz(dataset, labels, dictionary):
-    value = calinski_harabasz_score(dataset, labels)
-    print(f'calinski_harabasz value = {value}')
-    dictionary['calinski_harabasz'].append(value)
-    return value
+def kmeans(dataset, params):
+    clustering = KMeans(n_clusters=params['nclusters'], n_init=params['ninit'], max_iter=params['maxiter']).fit(
+        dataset)
+    methods(dataset, clustering, params, kmeans_evaluation)
 
 
-def dbscan(dataset, eps, min_samples, name):
-    clustering = DBSCAN(eps=eps, min_samples=min_samples).fit(dataset)
-    cluster_plot(dataset, clustering, name, eps, min_samples)
-    print(colored(f'Clustering quality for {name}', 'red'))
-    silhouette(dataset, clustering.labels_, dbscan_evaluation)
-    davies_bouldin(dataset, clustering.labels_, dbscan_evaluation)
-    calinski_harabasz(dataset, clustering.labels_, dbscan_evaluation)
+def dbscan(dataset, params):
+    clustering = DBSCAN(eps=params['eps'], min_samples=params['min_samples']).fit(dataset)
+    methods(dataset, clustering, params, dbscan_evaluation)
 
 
-def kmeans(dataset, nclusters, ninit, maxiter, name):
-    clustering = KMeans(n_clusters=nclusters, n_init=ninit, max_iter=maxiter).fit(dataset)
-    cluster_plot(dataset, clustering, name, ninit, maxiter)
-    print(colored(f'Clustering quality for {name}', 'red'))
-    silhouette(dataset, clustering.labels_, kmeans_evaluation)
-    davies_bouldin(dataset, clustering.labels_, kmeans_evaluation)
-    calinski_harabasz(dataset, clustering.labels_, kmeans_evaluation)
+def spectral_clustering(dataset, params):
+    clustering = SpectralClustering(n_clusters=params['nclusters'], affinity=params['affinity'],
+                                    random_state=params['random_state']).fit(dataset)
+    methods(dataset, clustering, params, spectral_clustering_evaluation)
 
 
-def spectral_clustering(dataset, nclusters, affinity, random_state, name):
-    clustering = SpectralClustering(n_clusters=nclusters, affinity=affinity, random_state=random_state).fit(dataset)
-    cluster_plot(dataset, clustering, name, affinity, random_state)
-    print(colored(f'Clustering quality for {name}', 'red'))
-    silhouette(dataset, clustering.labels_, spectral_clustering_evaluation)
-    davies_bouldin(dataset, clustering.labels_, spectral_clustering_evaluation)
-    calinski_harabasz(dataset, clustering.labels_, spectral_clustering_evaluation)
-
-
-def cluster_plot(dataset, clustering, name, param1, param2):
+def cluster_plot(dataset, clustering, params):
     groups = clustering.labels_
     dataset['COLORS'] = groups
     n_clusters_ = len(set(groups)) - (1 if -1 in groups else 0)
@@ -99,17 +83,20 @@ def cluster_plot(dataset, clustering, name, param1, param2):
         label = f'Cluster {group}' if group != -1 else 'Noise points'
         filtered_group = dataset[dataset['COLORS'] == group]
         plt.scatter(filtered_group['P1'], filtered_group['P2'], label=label)
-    if name == 'DBSCAN':
-        plt.figtext(0.05, 0.84, f'Number of clusters: {n_clusters_}\nEps: {param1}\nMin_samples: {param2}\n',
+    if params['name'] == 'DBSCAN':
+        plt.figtext(0.05, 0.84,
+                    f"Number of clusters: {n_clusters_}\nEps: {params['eps']}\nMin_samples: {params['min_samples']}\n",
                     fontsize=15)
-    elif name == 'K-Means':
+    elif params['name'] == 'K-Means':
         plt.scatter(clustering.cluster_centers_[:, 0], clustering.cluster_centers_[:, 1], c="#000000", s=100)
-        plt.figtext(0.05, 0.84, f'Number of clusters: {n_clusters_}\nN_init: {param1}\nMax_iter: {param2}',
+        plt.figtext(0.05, 0.84,
+                    f"Number of clusters: {n_clusters_}\nN_init: {params['ninit']}\nMax_iter: {params['maxiter']}",
                     fontsize=15)
     else:
-        plt.figtext(0.05, 0.84, f'Number of clusters: {n_clusters_}\nAffinity: {param1}\nRandom_state: {param2}',
+        plt.figtext(0.05, 0.84,
+                    f"Number of clusters: {n_clusters_}\nAffinity: {params['affinity']}\nRandom_state: {params['random_state']}",
                     fontsize=15)
-    plt.title(name)
+    plt.title(params['name'])
     fig = plt.gcf()
     fig.set_size_inches(14, 8)
     plt.legend()
@@ -131,7 +118,7 @@ def outlier_plot(dataset, outlier_index, contamination, n_neighbors, name):
 
 
 def outlier_remove(outlier_index, filename):
-    data = pd.read_csv('satellite.csv')
+    data = pd.read_csv(f'{file_name}.csv')
     x = []
     for item in outlier_index:
         x.extend(item)
@@ -166,9 +153,15 @@ def special_outlier_remove(filename):
     data.to_csv(filename)
 
 
+def read_config(filename='config.json'):
+    with open(filename, 'r') as f:
+        return json.load(f)
+
+
+params = read_config()
 file_name = 'satellite'
-mat2csv(file_name + '.mat', file_name + '.csv')
-df_names = [file_name + '.csv', 'df_without_outliers_by_hand.csv', 'df_without_outliers_lof.csv',
+mat2csv(f'{file_name}.mat', f'{file_name}.csv')
+df_names = [f'{file_name}.csv', 'df_without_outliers_by_hand.csv', 'df_without_outliers_lof.csv',
             'df_without_outliers_cof.csv']
 
 lof(36, 0.32, 'LOF')
@@ -178,9 +171,9 @@ special_outlier_remove('df_without_outliers_by_hand.csv')
 
 for df_name in df_names:
     df = prepare_data(df_name)
-    spectral_clustering(df, 2, 'nearest_neighbors', 0, 'Spectral_Clustering')
-    kmeans(df, 6, 10, 300, 'K-Means')
-    dbscan(df, 0.5, 5, 'DBSCAN')
+    kmeans(df, params['K-Means'])
+    dbscan(df, params['DBSCAN'])
+    # spectral_clustering(df, params['Spectral_Clustering'])
 
 
 def evaluation_comparison(dictionary, name):
@@ -192,4 +185,4 @@ def evaluation_comparison(dictionary, name):
 
 evaluation_comparison(kmeans_evaluation, 'K-means')
 evaluation_comparison(dbscan_evaluation, 'DBSCAN')
-evaluation_comparison(spectral_clustering_evaluation, 'Spectral_Clustering')
+# evaluation_comparison(spectral_clustering_evaluation, 'Spectral_Clustering')

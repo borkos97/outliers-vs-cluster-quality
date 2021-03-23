@@ -1,0 +1,19 @@
+{
+  "Spectral_Clustering": {
+    "nclusters": 2,
+    "affinity": "nearest_neighbors",
+    "random_state": 0,
+    "name": "Spectral_Clustering"
+    },
+  "K-Means": {
+    "nclusters": 6,
+    "ninit": 10,
+    "maxiter": 300,
+    "name": "K-Means"
+  },
+  "DBSCAN": {
+    "eps": 0.5,
+    "min_samples": 5,
+    "name": "DBSCAN"
+  }
+}
